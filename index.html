@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<html>
+    <head>
+        <script src="http://d3js.org/d3.v3.min.js"></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+        <style type="text/css">
+            table {
+                border-collapse: collapse;
+            }
+            th {
+                background-color: thistle;
+                color: black;
+                font-family: sans-serif;
+            }
+            th, td {
+                text-align: center;
+                padding: 5px;
+            }
+            table, th, td {
+               border: 1px solid black;
+            }
+        </style>
+    </head>
+    <body>
+        <script>
+        var nCols = 4,
+            nRows = 4;
+            
+        var h = 500,
+            w = 500;
+        
+        
+        var svg = d3.select("body").append("svg").attr("height", h).attr("width", w),
+            margin = { top: 10, right: 10, bottom: 10, left: 10},
+            width = +svg.attr("width") - margin.left - margin.right,
+            height = +svg.attr("height") - margin.top - margin.bottom,
+            g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+        
+        var widthScale = d3.scale.ordinal()
+                        .domain(d3.range(nCols))
+                        .rangeRoundBands([0, width], 0.15);  
+        var heightScale = d3.scale.ordinal()
+                        .domain(d3.range(nRows))
+                        .rangeRoundBands([0, height], 0.15);
+            
+        var xScale = d3.scale.linear()
+                .domain([0, 1])
+                .range([widthScale.rangeBand() / 12, widthScale.rangeBand()]);
+   
+        function firstLoad() {
+            var noCache = new Date().getTime();
+            d3.json("data.json" + "?_=" + noCache, function (data) {
+                g.selectAll(".bars")
+                    .data(data)
+                    .enter()
+                    .append("rect")
+                    .attr("class", "bars")
+                    .attr("x", function (d, i) { return widthScale(i % nCols); })
+                    .attr("y", function (d, i) { return heightScale(parseInt(i / nCols)); })
+                    .attr("height", heightScale.rangeBand())
+                    .attr("width", widthScale.rangeBand())
+                    .attr("fill", "#1CD1A8")
+                    .style("opacity", "0.4")
+                    .on("mouseover", function (d) {
+                        var serverName = Object.keys(d)[0];
+                        d3.select(".info" + "." + serverName)
+                            .style("opacity", "1.0");
+                    })
+                    .on("mouseout", function (d) {
+                        var serverName = Object.keys(d)[0];
+                        d3.select(".info" + "." + serverName)
+                            .style("opacity", "0.0");
+                    });
+                    
+
+                g.selectAll(".indicator")
+                    .data(data)
+                    .enter()
+                    .append("rect")
+                    .attr("class", function (d) { return "indicator" + " " + Object.keys(d)[0]; })
+                    .attr("x", function (d, i) { return widthScale(i % nCols); })
+                    .attr("y", function (d, i) { return (heightScale(parseInt(i / nCols))) + heightScale.rangeBand() / 4; })
+                    .attr("height", heightScale.rangeBand() / 2)
+                    .attr("width", function (d) {
+                        var serverName = Object.keys(d)[0];
+                        var totalMemory = 0,
+                            freeMemory = 0;
+                        for (var i=0; i < d[serverName].length; i++) {
+                            totalMemory = totalMemory + parseInt(d[serverName][i][1]);
+                            freeMemory = freeMemory + parseInt(d[serverName][i][2]);
+                        };
+                        return  xScale(freeMemory / totalMemory); 
+                    })
+                    .attr("fill", function (d, i) {
+                        var serverName = Object.keys(d)[0];
+                        var totalMemory = 0,
+                            freeMemory = 0;
+                        for (var i=0; i < d[serverName].length; i++) {
+                            totalMemory = totalMemory + parseInt(d[serverName][i][1]);
+                            freeMemory = freeMemory + parseInt(d[serverName][i][2]);
+                        };
+                        return "rgb(" + parseInt(255 * (1 - freeMemory / totalMemory)) + ", 0, " + parseInt(freeMemory / totalMemory * 64) + "0)";})
+                    .style("opacity", "0.8")
+                    .style("pointer-events", "none");
+
+                g.selectAll("text")
+                    .data(data)
+                    .enter()
+                    .append("text")
+                    .attr("class", function (d) { return Object.keys(d)[0]; })
+                    .attr("x", function (d, i) { return widthScale(i % nCols) + widthScale.rangeBand() / 2; })
+                    .attr("y", function (d, i) { return heightScale(parseInt(i / nCols)) + heightScale.rangeBand() / 6; })
+                    .text(function (d) { return Object.keys(d)[0]; })
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "#0A0505")
+                    .style("pointer-events", "none")
+                    .attr("font-family", "sans-serif")
+                    .attr("font-size", "13px")
+                    .attr("font-weight", "bold");
+                
+                var table = d3.select("body").selectAll("table")
+                            .data(data)
+                            .enter()
+                            .append("table")
+                            .attr("class", function (d) { return "info" + " " + Object.keys(d)[0]; })
+                            .style("opacity", "0.0")
+                            .style("position", "absolute")
+                            .style("left", (widthScale(nCols - 1) + widthScale.rangeBand() * 2) + "px")
+                            .style("top", "20px");
+                
+                var thead  = table.append("thead"),
+                    tbody  = table.append("tbody"),
+                    header = thead.append("tr");
+                
+                header.append("th").text("time");
+                header.append("th").text("total memory");
+                header.append("th").text("free memory");
+                
+                var rows = tbody.selectAll("tr")
+                            .data(function (d) {
+                                var serverName = Object.keys(d)[0];
+                                return d[serverName];
+                            })
+                            .enter()
+                            .append("tr");
+                rows.each(function (d) {
+                    for (var i=0; i < d.length; i++){
+                        d3.select(this)
+                            .append("td")
+                            .text(d[i]);
+                    };
+                });
+            });
+        };
+
+            
+        function updateBar() {
+            var noCache = new Date().getTime();
+            d3.json("data.json" + "?_=" + noCache, function (data) {
+                g.selectAll(".indicator")
+                    .data(data)
+                    .transition()
+                    .duration(500)
+                    .attr("width", function (d) {
+                        var serverName = Object.keys(d)[0];
+                        var totalMemory = 0,
+                            freeMemory = 0;
+                        for (var i=0; i < d[serverName].length; i++) {
+                            totalMemory = totalMemory + parseInt(d[serverName][i][1]);
+                            freeMemory = freeMemory + parseInt(d[serverName][i][2]);
+                        }; 
+                        return  xScale(freeMemory / totalMemory); 
+                    })
+                
+                for (var i=0; i < data.length; i++) {
+                    var serverName = Object.keys(data[i])[0];
+                    var table = d3.select(".info" + "." + serverName);
+                    var dataset = [];
+                    var serverData = data[i][serverName];
+                    for (var j=0; j < serverData.length; j++) {
+                        dataset.push(serverData[j]);
+                    };
+                    table.selectAll("tbody").selectAll("tr").remove();
+                    table.selectAll("tbody").selectAll("tr")
+                        .data(dataset)
+                        .enter()
+                        .append("tr")
+                        .each(function (d) {
+                            for (var k=0; k < d.length; k++) {
+                                d3.select(this)
+                                    .append("td")
+                                    .text(d[k]);
+                            };
+                        })
+                };
+            });
+        };
+            firstLoad();
+            setInterval(function(){ updateBar(); }, 1000);
+        </script>
+        
+    </body>
+    
+    
+</html>
