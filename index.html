@@ -4,23 +4,32 @@
     <head>
         <script src="http://d3js.org/d3.v3.min.js"></script>
         <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+        <script src="https://d3js.org/d3-color.v1.min.js"></script>
+        <script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
+        <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
         <style type="text/css">
             table {
-                border-collapse: collapse;
+              font-family: 'Arial';
+              font-size: 13px;
+              margin: 25px auto;
+              border-collapse: collapse;
+              border: 1px solid #eee;
+              box-shadow: 0px 0px 20px rgba(0,0,0,0.10),
+                 0px 10px 20px rgba(0,0,0,0.05),
+                 0px 20px 20px rgba(0,0,0,0.05),
+                 0px 30px 20px rgba(0,0,0,0.05);
+            }
+            td, th {
+              width: 4rem;
+              height: 2rem;
+              border: 1px solid #ccc;
+              text-align: center;
             }
             th {
-                background-color: thistle;
-                color: black;
-                font-family: sans-serif;
+              background: lightblue;
+              border-color: white;
             }
-            th, td {
-                text-align: center;
-                padding: 5px;
-            }
-            table, th, td {
-               border: 1px solid black;
-            }
-        </style>
+            </style>
     </head>
     <body>
         <script>
@@ -29,26 +38,23 @@
             
         var h = 500,
             w = 500;
-        
-        
+                
         var svg = d3.select("body").append("svg").attr("height", h).attr("width", w),
             margin = { top: 10, right: 10, bottom: 10, left: 10},
             width = +svg.attr("width") - margin.left - margin.right,
             height = +svg.attr("height") - margin.top - margin.bottom,
             g = svg.append("g").attr("transform", "translate(" + margin.left + "," + margin.top + ")");
-
         
+          
         var widthScale = d3.scale.ordinal()
                         .domain(d3.range(nCols))
                         .rangeRoundBands([0, width], 0.15);  
         var heightScale = d3.scale.ordinal()
                         .domain(d3.range(nRows))
                         .rangeRoundBands([0, height], 0.15);
-            
-        var xScale = d3.scale.linear()
-                .domain([0, 1])
-                .range([widthScale.rangeBand() / 12, widthScale.rangeBand()]);
-   
+        var heightDelta = (heightScale(2) - heightScale(1) - heightScale.rangeBand()) / 2.,
+            widthDelta = (widthScale(2) - widthScale(1) - widthScale.rangeBand()) / 2.;
+
         function firstLoad() {
             var noCache = new Date().getTime();
             d3.json("data.json" + "?_=" + noCache, function (data) {
@@ -61,49 +67,43 @@
                     .attr("y", function (d, i) { return heightScale(parseInt(i / nCols)); })
                     .attr("height", heightScale.rangeBand())
                     .attr("width", widthScale.rangeBand())
-                    .attr("fill", "#1CD1A8")
-                    .style("opacity", "0.4")
-                    .on("mouseover", function (d) {
+                    .attr("stroke", "lightblue")
+                    .attr("stroke-width", 2)
+                    .attr("fill", function (d) {
+                        var serverName = Object.keys(d)[0];
+                        var totalMemory = 0,
+                            freeMemory = 0;
+                        for (var i=0; i < d[serverName].length; i++) {
+                            totalMemory = totalMemory + parseInt(d[serverName][i][1]);
+                            freeMemory = freeMemory + parseInt(d[serverName][i][2]);
+                        };
+                        if (totalMemory == 0)
+                            return "white";
+                        else
+                            return d3.interpolateYlOrRd(1. - freeMemory * 1. / totalMemory);
+                    })
+                    .style("opacity", "1")
+                    .on("mouseover", function (d, i) {
                         var serverName = Object.keys(d)[0];
                         d3.select(".info" + "." + serverName)
                             .style("opacity", "1.0");
+                        d3.select(this)
+                            .attr("height", heightScale.rangeBand() + 2 * heightDelta)
+                            .attr("width", widthScale.rangeBand() + 2 * widthDelta)
+                            .attr("x", widthScale(i % nCols) - widthDelta)
+                            .attr("y", heightScale(parseInt(i / nCols)) - heightDelta);
                     })
-                    .on("mouseout", function (d) {
+                    .on("mouseout", function (d, i) {
                         var serverName = Object.keys(d)[0];
                         d3.select(".info" + "." + serverName)
                             .style("opacity", "0.0");
-                    });
                     
-
-                g.selectAll(".indicator")
-                    .data(data)
-                    .enter()
-                    .append("rect")
-                    .attr("class", function (d) { return "indicator" + " " + Object.keys(d)[0]; })
-                    .attr("x", function (d, i) { return widthScale(i % nCols); })
-                    .attr("y", function (d, i) { return (heightScale(parseInt(i / nCols))) + heightScale.rangeBand() / 4; })
-                    .attr("height", heightScale.rangeBand() / 2)
-                    .attr("width", function (d) {
-                        var serverName = Object.keys(d)[0];
-                        var totalMemory = 0,
-                            freeMemory = 0;
-                        for (var i=0; i < d[serverName].length; i++) {
-                            totalMemory = totalMemory + parseInt(d[serverName][i][1]);
-                            freeMemory = freeMemory + parseInt(d[serverName][i][2]);
-                        };
-                        return  xScale(freeMemory / totalMemory); 
-                    })
-                    .attr("fill", function (d, i) {
-                        var serverName = Object.keys(d)[0];
-                        var totalMemory = 0,
-                            freeMemory = 0;
-                        for (var i=0; i < d[serverName].length; i++) {
-                            totalMemory = totalMemory + parseInt(d[serverName][i][1]);
-                            freeMemory = freeMemory + parseInt(d[serverName][i][2]);
-                        };
-                        return "rgb(" + parseInt(255 * (1 - freeMemory / totalMemory)) + ", 0, " + parseInt(freeMemory / totalMemory * 64) + "0)";})
-                    .style("opacity", "0.8")
-                    .style("pointer-events", "none");
+                        d3.select(this)
+                            .attr("height", heightScale.rangeBand())
+                            .attr("width", widthScale.rangeBand())
+                            .attr("x", widthScale(i % nCols))
+                            .attr("y", heightScale(parseInt(i / nCols)));
+                    });
 
                 g.selectAll("text")
                     .data(data)
@@ -111,8 +111,35 @@
                     .append("text")
                     .attr("class", function (d) { return Object.keys(d)[0]; })
                     .attr("x", function (d, i) { return widthScale(i % nCols) + widthScale.rangeBand() / 2; })
-                    .attr("y", function (d, i) { return heightScale(parseInt(i / nCols)) + heightScale.rangeBand() / 6; })
+                    .attr("y", function (d, i) { return heightScale(parseInt(i / nCols)) + heightScale.rangeBand() / 3; })
                     .text(function (d) { return Object.keys(d)[0]; })
+                    .attr("text-anchor", "middle")
+                    .attr("fill", "#0A0505")
+                    .attr("font-family", "sans-serif")
+                    .attr("font-size", "13px")
+                    .attr("font-weight", "bold")
+                    .style("pointer-events", "none");
+                
+                g.selectAll(".percentage")
+                    .data(data)
+                    .enter()
+                    .append("text")
+                    .attr("class", "percentage")
+                    .attr("x", function (d, i) { return widthScale(i % nCols) + widthScale.rangeBand() / 2; })
+                    .attr("y", function (d, i) { return heightScale(parseInt(i / nCols)) + heightScale.rangeBand() * 2 / 3; })
+                    .text(function (d) { 
+                        var serverName = Object.keys(d)[0];
+                        var totalMemory = 0,
+                            freeMemory = 0;
+                        for (var i=0; i < d[serverName].length; i++) {
+                            totalMemory = totalMemory + parseInt(d[serverName][i][1]);
+                            freeMemory = freeMemory + parseInt(d[serverName][i][2]);
+                        };
+                        if (totalMemory == 0)
+                            return "No results";
+                        else
+                            return "Free: " + d3.format("%")(freeMemory * 1. / totalMemory);
+                    })
                     .attr("text-anchor", "middle")
                     .attr("fill", "#0A0505")
                     .style("pointer-events", "none")
@@ -159,21 +186,42 @@
         function updateBar() {
             var noCache = new Date().getTime();
             d3.json("data.json" + "?_=" + noCache, function (data) {
-                g.selectAll(".indicator")
+                g.selectAll(".bars")
                     .data(data)
                     .transition()
                     .duration(500)
-                    .attr("width", function (d) {
+                    .attr("fill", function (d) {
                         var serverName = Object.keys(d)[0];
                         var totalMemory = 0,
                             freeMemory = 0;
                         for (var i=0; i < d[serverName].length; i++) {
                             totalMemory = totalMemory + parseInt(d[serverName][i][1]);
                             freeMemory = freeMemory + parseInt(d[serverName][i][2]);
-                        }; 
-                        return  xScale(freeMemory / totalMemory); 
-                    })
+                        };
+                        if (totalMemory == 0)
+                            return "white";
+                        else
+                            return d3.interpolateYlOrRd(1. - freeMemory * 1. / totalMemory);
+                    });
                 
+                g.selectAll(".percentage")
+                    .data(data)
+                    .transition()
+                    .duration(500)
+                    .text(function (d) { 
+                        var serverName = Object.keys(d)[0];
+                        var totalMemory = 0,
+                            freeMemory = 0;
+                        for (var i=0; i < d[serverName].length; i++) {
+                            totalMemory = totalMemory + parseInt(d[serverName][i][1]);
+                            freeMemory = freeMemory + parseInt(d[serverName][i][2]);
+                        };
+                        if (totalMemory == 0)
+                            return "No results";
+                        else
+                            return "Free: " + d3.format("%")(freeMemory * 1. / totalMemory);
+                    });
+                                
                 for (var i=0; i < data.length; i++) {
                     var serverName = Object.keys(data[i])[0];
                     var table = d3.select(".info" + "." + serverName);
